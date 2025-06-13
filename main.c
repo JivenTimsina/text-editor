@@ -42,7 +42,7 @@ struct termios term;
 // initilize editorstate
 editorState E = {.cx = 0, .cy = 0, .buffer.numRows = 1, .file.dirty = 0};
 
-//  enable raw mode
+// enable raw mode
 void enableRawMode() {
   tcgetattr(STDIN_FILENO, &term);
   struct termios raw = term;
@@ -73,7 +73,7 @@ void move(int y, int x) {
   fflush(stdout);
 }
 
-// Get terminal size
+// get terminal size
 void getWindowSize() {
   struct winsize ws;
   ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
@@ -83,8 +83,8 @@ void getWindowSize() {
 
 // status bar
 void drawStatusBar(const char *msg) {
-  getWindowSize();             // get the window size
-  move(E.rows - 1, 0);         // move curosr to bottom line
+  getWindowSize();
+  move(E.rows - 1, 0);         // move cursor to bottom line
   printf("\033[7m");           // white on black
   printf("%-*s", E.cols, msg); // left-align msg, fill rest with spaces
   printf("\033[0m");           // reset attributes
@@ -93,28 +93,35 @@ void drawStatusBar(const char *msg) {
 
 // save to file
 void saveToFile() {
+  // open in write mode
   E.file.Pfile = fopen(E.file.fileName, "w");
   if (!E.file.Pfile) {
     fprintf(stderr, "failed to open file!\n");
     exit(1);
   }
+  // write buffer with \n
   for (int i = 0; i < E.buffer.numRows; i++) {
     fprintf(E.file.Pfile, "%s\n", E.buffer.data[i]);
   }
   fclose(E.file.Pfile);
+
+  // show saved status
   char savedStatus[50];
   snprintf(savedStatus, sizeof(savedStatus), "Saved %d line to %s",
            (E.buffer.numRows), E.file.fileName);
   drawStatusBar(savedStatus);
   usleep(1000000 / 2);
-  E.file.dirty = 0;
+  E.file.dirty = 0; // set dirty flag to 0 (file is changed and saved)
 }
 
 // open file
 void openFile() {
+  // open in read mode if exists
   E.file.Pfile = fopen(E.file.fileName, "r");
   if (!E.file.Pfile)
     return;
+
+  // read and save to buffer
   char ch;
   while ((ch = fgetc(E.file.Pfile)) != EOF) {
     if (ch == '\n') {
@@ -131,53 +138,106 @@ void openFile() {
       printf("%c", ch);
     }
   }
+  // close after reading
   fclose(E.file.Pfile);
   E.cx = 0;
   move(E.cy, E.cx);
 }
 
-// new line (Enter key)
+// newline
 void handleNewLine() {
+  if (E.buffer.numRows >= MAX_ROWS)
+    return; // handle overflow
+
+  int currentRowLen = E.buffer.rowLengths[E.cy];
+  int tailLen = currentRowLen - E.cx;
+
+  // shift all rows down
+  for (int i = E.buffer.numRows; i > E.cy + 1; i--) {
+    strcpy(E.buffer.data[i], E.buffer.data[i - 1]);
+    E.buffer.rowLengths[i] = E.buffer.rowLengths[i - 1];
+  }
+
+  // move the text after cursor to the new line
+  strcpy(E.buffer.data[E.cy + 1], E.buffer.data[E.cy] + E.cx);
+  E.buffer.data[E.cy + 1][tailLen] = '\0';
+  E.buffer.rowLengths[E.cy + 1] = tailLen;
+
+  // end the current line at cursor
+  E.buffer.data[E.cy][E.cx] = '\0';
   E.buffer.rowLengths[E.cy] = E.cx;
+
+  // update cursor
   E.cy++;
   E.cx = 0;
-  E.buffer.rowLengths[E.cy] = 0;
-  E.buffer.data[E.cy][0] = '\0';
   E.buffer.numRows++;
 }
 
 // backspace
 void handleBackspace() {
-  if (E.buffer.numRows == 1 && E.cx == 0) {
-    return;
+  if (E.buffer.numRows == 1 && E.cx == 0 && E.cy == 0) {
+    return; // no text to delete
   }
+
   if (E.cx > 0) {
+    // delete character before cursor
     for (int i = E.cx - 1; i < E.buffer.rowLengths[E.cy]; i++) {
       E.buffer.data[E.cy][i] = E.buffer.data[E.cy][i + 1];
     }
     E.buffer.rowLengths[E.cy]--;
     E.cx--;
-  } else {
-    E.buffer.rowLengths[E.cy] = 0;
-    E.cy--;
-    E.cx = E.buffer.rowLengths[E.cy];
-    E.buffer.numRows--;
+  } else { // if E.cx is at 0
+    // merge current line into the previous one
+    int prevLen = E.buffer.rowLengths[E.cy - 1];
+    int currLen = E.buffer.rowLengths[E.cy];
+
+    // check for line length limit before merging
+    if (prevLen + currLen < MAX_COLS) {
+
+      // append current line to previous
+      strcat(E.buffer.data[E.cy - 1], E.buffer.data[E.cy]);
+      E.buffer.rowLengths[E.cy - 1] += currLen;
+
+      // shift all lines after current up by one
+      for (int i = E.cy; i < E.buffer.numRows - 1; i++) {
+        strcpy(E.buffer.data[i], E.buffer.data[i + 1]);
+        E.buffer.rowLengths[i] = E.buffer.rowLengths[i + 1];
+      }
+
+      // clear the last line
+      E.buffer.data[E.buffer.numRows - 1][0] = '\0';
+      E.buffer.rowLengths[E.buffer.numRows - 1] = 0;
+      E.buffer.numRows--;
+
+      // move cursor to end of the previous line
+      E.cy--;
+      E.cx = prevLen;
+    }
   }
 }
 
 // initilize editor
 void initEditor() {
+  // set buffers to 0
   memset(E.buffer.data, 0, sizeof(E.buffer.data));
   memset(E.buffer.rowLengths, 0, sizeof(E.buffer.rowLengths));
 
   printf("\033[2J"); // clear screen
+
   // format the status message
   snprintf(E.status, sizeof(E.status), "Ctrl+S = Save | Ctrl+Q = Quit | %s",
            E.file.fileName);
+
+  // status bar
   drawStatusBar(E.status);
+
+  // set and move cursor (cursor position was changed after calling
+  // drawStatusBar())
   E.cy = 0;
   E.cx = 0;
   move(E.cy, E.cx);
+
+  // open file
   openFile();
 }
 
@@ -185,6 +245,7 @@ void initEditor() {
 void refreshScreen() {
   write(STDOUT_FILENO, "\x1b[2J", 4); // clear screen
   write(STDOUT_FILENO, "\x1b[H", 3);  // move cursor to (0, 0)
+
   // draw buffer
   for (int i = 0; i < E.buffer.numRows; i++) {
     if (i < E.buffer.numRows) {
@@ -192,7 +253,7 @@ void refreshScreen() {
       write(STDOUT_FILENO, "\n", 1);
     }
   }
-  // show status bar
+  // show status bar (filename * if dirty)
   if (E.file.dirty == 1) {
     snprintf(E.status, sizeof(E.status), "Ctrl+S = Save | Ctrl+Q = Quit | %s *",
              E.file.fileName);
@@ -252,12 +313,12 @@ void processKeyPresses() {
       break;
     }
 
-    // Ctrl+S
+  // Ctrl+S
   case 19:
     saveToFile();
     break;
 
-    // arrow keys
+  // arrow keys
   case 27:
     E.ch[1] = getch();
     if (E.ch[1] == '[') {
@@ -319,7 +380,7 @@ void processKeyPresses() {
       addToBuffer(); // printable characters
     }
     refreshScreen();
-    E.file.dirty = 1;
+    E.file.dirty = 1; // set dirty flag (character is added i.e file is changed)
   }
 }
 
