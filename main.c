@@ -107,7 +107,7 @@ void saveToFile() {
     fprintf(stderr, "failed to open file!\n");
     exit(1);
   }
-  // write buffer with \n
+  // write buffer with a \n
   for (int i = 0; i < E.buffer.numRows; i++) {
     fprintf(E.file.Pfile, "%s\n", E.buffer.data[i]);
   }
@@ -147,9 +147,12 @@ void openFile() {
       printf("%c", ch);
     }
   }
+  // remove the last \n
+  E.cy--;
+  E.buffer.numRows--;
+  E.cx = E.buffer.rowLengths[E.cy];
   // close after reading
   fclose(E.file.Pfile);
-  E.cx = 0;
   move(E.cy, E.cx);
 }
 
