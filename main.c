@@ -81,6 +81,14 @@ void getWindowSize() {
   E.cols = ws.ws_col;
 }
 
+// nord theme
+void nordTheme() {
+  // Background: Polar Night 0 (#2E3440)
+  // Foreground: Snow Storm 0 (#D8DEE9)
+  printf("\033[48;2;46;52;64m");    // Background
+  printf("\033[38;2;216;222;233m"); // Text
+}
+
 // status bar
 void drawStatusBar(const char *msg) {
   getWindowSize();
@@ -110,6 +118,7 @@ void saveToFile() {
   snprintf(savedStatus, sizeof(savedStatus), "Saved %d line to %s",
            (E.buffer.numRows), E.file.fileName);
   drawStatusBar(savedStatus);
+  nordTheme();
   usleep(1000000 / 2);
   E.file.dirty = 0; // set dirty flag to 0 (file is changed and saved)
 }
@@ -230,7 +239,8 @@ void initEditor() {
 
   // status bar
   drawStatusBar(E.status);
-
+  // load theme
+  nordTheme();
   // set and move cursor (cursor position was changed after calling
   // drawStatusBar())
   E.cy = 0;
@@ -261,7 +271,11 @@ void refreshScreen() {
     snprintf(E.status, sizeof(E.status), "Ctrl+S = Save | Ctrl+Q = Quit | %s",
              E.file.fileName);
   }
+  // draw status bar
   drawStatusBar(E.status);
+
+  // load theme
+  nordTheme();
 
   // move the cursor to the editing position
   move(E.cy, E.cx);
@@ -379,9 +393,9 @@ void processKeyPresses() {
     } else {
       addToBuffer(); // printable characters
     }
-    refreshScreen();
     E.file.dirty = 1; // set dirty flag (character is added i.e file is changed)
   }
+  refreshScreen();
 }
 
 // main
