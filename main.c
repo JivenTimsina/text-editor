@@ -54,19 +54,6 @@ void enableRawMode() {
 // disable raw mode
 void disableRawMode() { tcsetattr(STDIN_FILENO, TCSANOW, &term); }
 
-// getch function implimentation
-char getch() {
-  struct termios org, raw;
-  tcgetattr(0, &org);
-  raw = org;
-  raw.c_lflag &= ~(ICANON | ECHO);
-  tcsetattr(0, TCSANOW, &raw);
-  char ch;
-  read(STDIN_FILENO, &ch, 1);
-  tcsetattr(0, TCSANOW, &org);
-  return ch;
-}
-
 // move the cursor the a specific locatoin
 void move(int y, int x) {
   printf("\033[%d;%dH", y + 1, x + 1);
@@ -304,7 +291,7 @@ void addToBuffer() {
 // process key presses
 void processKeyPresses() {
   // input key
-  E.ch[0] = getch();
+  E.ch[0] = getchar();
 
   switch (E.ch[0]) {
 
@@ -337,9 +324,9 @@ void processKeyPresses() {
 
   // arrow keys
   case 27:
-    E.ch[1] = getch();
+    E.ch[1] = getchar();
     if (E.ch[1] == '[') {
-      E.ch[2] = getch();
+      E.ch[2] = getchar();
       switch (E.ch[2]) {
       case 'A': // arrow up
         if (E.cy > 0) {
