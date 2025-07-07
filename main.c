@@ -174,7 +174,7 @@ void handleNewLine() {
 
 // backspace
 void handleBackspace() {
-  if (E.buffer.numRows == 1 && E.cx == 0 && E.cy == 0) {
+  if (E.cx == 0 && E.cy == 0) {
     return; // no text to delete
   }
 
