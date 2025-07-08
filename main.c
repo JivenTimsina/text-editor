@@ -1,5 +1,6 @@
 // includes
 #include <ctype.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -271,6 +272,14 @@ void refreshScreen() {
   move(E.cy, E.cx);
 }
 
+// update window size
+void handle_win_size(int sig) {
+  (void)sig;
+  getWindowSize();
+  refreshScreen();
+  fflush(stdout);
+}
+
 // add character to buffer
 void addToBuffer() {
   if (isprint(E.ch[0])) {
@@ -294,7 +303,6 @@ void processKeyPresses() {
   E.ch[0] = getchar();
 
   switch (E.ch[0]) {
-
   // CTRL + Q
   case 17:
     if (E.file.dirty == 1) // file is changed but not saved
@@ -402,6 +410,10 @@ int main(int argc, char *argv[]) {
 
   atexit(disableRawMode);
   enableRawMode();
+
+  // handler for window change
+  signal(SIGWINCH, handle_win_size);
+
   initEditor();
   while (1) {
     refreshScreen();
